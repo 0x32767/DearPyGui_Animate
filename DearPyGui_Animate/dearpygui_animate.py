@@ -86,7 +86,14 @@ def add(
     end_val,
     ease: list[float, float, float, float],
     duration: int,
-    **kwargs,
+    *,
+    name: str = "",
+    callback="",
+    callback_data="",
+    early_callback="",
+    early_callback_data="",
+    loop="",
+    timeoffset=0,
 ):
     """
     adds a new animation to animations register
@@ -117,19 +124,19 @@ def add(
         distance = end_val - start_val
 
     new_animation = Animation(
-        kwargs.get("name", ""),
-        animation_type,
-        tag,
-        start_val,
-        distance,
-        ease,
-        duration,
-        callback_function=kwargs.get("callback", ""),
-        callback_data=kwargs.get("callback_data", ""),
-        early_callback=kwargs.get("early_callback", ""),
-        early_callback_data=kwargs.get("early_callback_data", ""),
-        loop=kwargs.get("loop", ""), # TODO add support for a NO_LOOP as a loop type
-        starttime=dpg.get_total_time() + kwargs.get("timeoffset", 0), # TODO
+        animation_name=name,
+        animation_type=animation_type,
+        object_name=tag,
+        start_value=start_val,
+        distance=distance,
+        ease=ease,
+        duration=duration,
+        callback_function=callback,
+        callback_data=callback_data,
+        early_callback=early_callback,
+        early_callback_data=early_callback_data,
+        loop=loop, # TODO add support for a NO_LOOP as a loop type
+        starttime=(dpg.get_total_time() + timeoffset),
         is_playing=False,
         is_paused=False,
         is_reversed=False,
