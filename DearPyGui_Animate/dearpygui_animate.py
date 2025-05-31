@@ -32,48 +32,62 @@ delta_opacities = []
 # 				Enum for Animation options
 # -----------------------------------------------------------------------------
 
+
 # Strings are set manually for backwards compatibility purposes
 class AnimationType(StrEnum):
     POSITION = "position"
     SIZE = "size"
     OPACITY = "opacity"
 
+
 class AnimationLoopType(StrEnum):
     CYCLE = "cycle"
     PING_PONG = "ping-pong"
     CONTINUE = "continue"
 
+
 # -----------------------------------------------------------------------------
 # 				Animation dataclasses
 # -----------------------------------------------------------------------------
 
+
 @dataclass(slots=True)
 class Animation:
-    animation_name: any
-    animation_type: AnimationType # either: position size opacity
-    object_name: any
-    start_value: any
-    distance: any
-    ease: any
+    animation_name: str
+    animation_type: AnimationType  # either: position size opacity
+    object_name: str
+    start_value: any  # depends on animation type
+    distance: int
+    ease: list[float, float, float, float]
     duration: int
-    starttime: any
+    starttime: float
     frame_counter: int
-    last_ease: int
-    loop: AnimationLoopType # either: ping-pong cycle continue
+    last_ease: float
+    loop: AnimationLoopType  # either: ping-pong cycle continue
     loop_counter: int
     callback_function: any
-    function_data: any
+    callback_data: any
     early_callback: any
     early_callback_data: any
     is_playing: bool
     is_paused: bool
     is_reversed: bool
 
+
 # -----------------------------------------------------------------------------
 # 				Main Functions
 # -----------------------------------------------------------------------------
 
-def add(animation_type: AnimationType, object, start_val, end_val, ease, duration, **kwargs):
+
+def add(
+    animation_type: AnimationType,
+    tag: str,
+    start_val,
+    end_val,
+    ease: list[float, float, float, float],
+    duration: int,
+    **kwargs,
+):
     """
     adds a new animation to animations register
     """
@@ -81,7 +95,7 @@ def add(animation_type: AnimationType, object, start_val, end_val, ease, duratio
     # TODO raise a warning to the user in the following cases
     # fix min-values: smallest size window = 32x32, smallest size item = 1x1
     if animation_type == AnimationType.SIZE:
-        if dpg.get_item_type(object) == "mvAppItemType::Window":
+        if dpg.get_item_type(tag) == "mvAppItemType::Window":
             for i in range(2):
                 if start_val[i] < 32:
                     start_val[i] = 32
@@ -102,46 +116,26 @@ def add(animation_type: AnimationType, object, start_val, end_val, ease, duratio
     except Exception:
         distance = end_val - start_val
 
-    # TODO make the dict redundant using kwargs.get("key", "default")
-    options = {
-        "name": "",
-        "time_offset": 0,
-        "loop": "",
-        "callback": "",
-        "callback_data": "",
-        "early_callback": "",
-        "early_callback_data": ""
-    }
-    options.update(kwargs)
-
-    starttime = dpg.get_total_time() + options["time_offset"]
-    frame_counter = 0
-    last_ease = 0
-    loop_counter = 0
-    is_playing = False
-    is_paused = False
-    is_reversed = False
-
     new_animation = Animation(
-        options["name"],
+        kwargs.get("name", ""),
         animation_type,
-        object,
+        tag,
         start_val,
         distance,
         ease,
         duration,
-        starttime,
-        frame_counter,
-        last_ease,
-        options["loop"],
-        loop_counter,
-        options["callback"],
-        options["callback_data"],
-        options["early_callback"],
-        options["early_callback_data"],
-        is_playing,
-        is_paused,
-        is_reversed
+        callback_function=kwargs.get("callback", ""),
+        callback_data=kwargs.get("callback_data", ""),
+        early_callback=kwargs.get("early_callback", ""),
+        early_callback_data=kwargs.get("early_callback_data", ""),
+        loop=kwargs.get("loop", ""), # TODO add support for a NO_LOOP as a loop type
+        starttime=dpg.get_total_time() + kwargs.get("timeoffset", 0), # TODO
+        is_playing=False,
+        is_paused=False,
+        is_reversed=False,
+        loop_counter=0,
+        last_ease=0,
+        frame_counter=0,
     )
 
     global animations
@@ -178,14 +172,17 @@ def run():
     global animations
 
     for animation in animations:
-
         if dpg.get_total_time() >= animation.starttime and not animation.is_paused:
 
             if animation.early_callback and animation.frame_counter == 0:
-                callbacks[animation.early_callback] = (animation.object_name, animation.early_callback_data)
+                callbacks[animation.early_callback] = (
+                    animation.object_name,
+                    animation.early_callback_data,
+                )
 
             animation.is_playing = True
             frame = animation.frame_counter / animation.duration
+
             ease = bezier_transition(frame, animation.ease)
 
             # TODO raise error/warning here
@@ -213,10 +210,13 @@ def run():
 
             elif animation.frame_counter == animation.duration:
                 if animation.loop:
-                    set_loop(animation, animations_updated)
+                    animations_updated.append(set_loop(animation))
 
                 if animation.callback_function:
-                    callbacks[animation.callback_function] = (animation.object_name, animation.function_data)
+                    callbacks[animation.callback_function] = (
+                        animation.object_name,
+                        animation.callback_data,
+                    )
 
         else:
             animations_updated.append(animation)
@@ -227,11 +227,11 @@ def run():
 
     animations = animations_updated
 
-    for func, dat in callbacks.items(): # TODO tuple unpack `dat`
+    for func, dat in callbacks.items():  # TODO tuple unpack `dat`
         func(dat[0], dat[1])
 
 
-def play(animation_name):
+def play(animation_name: str):
     """
     resumes an animation
     """
@@ -243,7 +243,7 @@ def play(animation_name):
             animation.is_paused = False
 
 
-def pause(animation_name):
+def pause(animation_name: str):
     """
     pauses an animation
     """
@@ -255,7 +255,7 @@ def pause(animation_name):
             animation.is_paused = True
 
 
-def remove(animation_name):
+def remove(animation_name: str):
     """
     removes an animation from animations register
     """
@@ -279,7 +279,10 @@ def remove(animation_name):
     if object_anitype:
         found = False
         for ani in animations_updated:
-            if ani.object_name == object_anitype[0] and ani.animation_type == object_anitype[1]:
+            if (
+                ani.object_name == object_anitype[0]
+                and ani.animation_type == object_anitype[1]
+            ):
                 found = True
                 break
 
@@ -325,12 +328,15 @@ def get(*args):
             if entry == "object":
                 return_data.append(animation.object_name)
 
-            if entry == "startval": # Don't touch str, backwards compatibility
+            if entry == "startval":  # Don't touch str, backwards compatibility
                 return_data.append(animation.start_value)
 
-            if entry == "endval": # Don't touch str, backwards compatibility
+            if entry == "endval":  # Don't touch str, backwards compatibility
                 try:
-                    end_val = [animation.start_value[0] + animation.distance[0], animation.start_value[1] + animation.distance[1]]
+                    end_val = [
+                        animation.start_value[0] + animation.distance[0],
+                        animation.start_value[1] + animation.distance[1],
+                    ]
                 except Exception:
                     end_val = animation.start_value + animation.distance
                 return_data.append(end_val)
@@ -344,20 +350,20 @@ def get(*args):
             if entry == "starttime":
                 return_data.append(animation.starttime)
 
-            if entry == "framecounter": # Don't touch str, backwards compatibility
+            if entry == "framecounter":  # Don't touch str, backwards compatibility
                 return_data.append(animation.frame_counter)
 
             if entry == "loop":
                 return_data.append(animation.loop)
 
-            if entry == "loopcounter": # Don't touch str, backwards compatibility
+            if entry == "loopcounter":  # Don't touch str, backwards compatibility
                 return_data.append(animation.loop_counter)
 
             if entry == "callback":
                 return_data.append(animation.callback_function)
 
             if entry == "callback_data":
-                return_data.append(animation.function_data)
+                return_data.append(animation.callback_data)
 
             if entry == "early_callback":
                 return_data.append(animation.early_callback)
@@ -365,10 +371,10 @@ def get(*args):
             if entry == "early_callback_data":
                 return_data.append(animation.early_callback_data)
 
-            if entry == "isplaying": # Don't touch str, backwards compatibility
+            if entry == "isplaying":  # Don't touch str, backwards compatibility
                 return_data.append(animation.is_paused)
 
-            if entry == "ispaused": # Don't touch str, backwards compatibility
+            if entry == "ispaused":  # Don't touch str, backwards compatibility
                 return_data.append(animation.is_paused)
 
     if not return_data:
@@ -382,7 +388,8 @@ def get(*args):
 # 				Helper Functions
 # -----------------------------------------------------------------------------
 
-def bezier_transition(search, handles):
+
+def bezier_transition(search: int, handles: list[float, float, float, float]):
     """
     solving y (progress) of bezier curve for given x (time)
     using the newton-raphson method
@@ -397,19 +404,19 @@ def bezier_transition(search, handles):
     t = search
 
     for i in range(100):
-        x = (ax * t ** 3 + bx * t ** 2 + cx * t) - search
+        x = (ax * t**3 + bx * t**2 + cx * t) - search
 
         if round(x, 4) == 0:
             break
 
-        dx = 3.0 * ax * t ** 2 + 2.0 * bx * t + cx
+        dx = 3.0 * ax * t**2 + 2.0 * bx * t + cx
 
-        t -= (x / dx)
+        t -= x / dx
 
-    return 3 * t * (1 - t) ** 2 * h1y + 3 * t ** 2 * (1 - t) * h2y + t ** 3
+    return 3 * t * (1 - t) ** 2 * h1y + 3 * t**2 * (1 - t) * h2y + t**3
 
 
-def set_loop(animation: Animation, animations_updated):
+def set_loop(animation: Animation):
     """
     prepare animation for next loop iteration
     """
@@ -426,17 +433,20 @@ def set_loop(animation: Animation, animations_updated):
 
     elif animation.loop == AnimationLoopType.CONTINUE:
         try:
-            animation.start_value = [animation.start_value[0] + animation.distance[0], animation.start_value[1] + animation.distance[1]]
+            animation.start_value = [
+                animation.start_value[0] + animation.distance[0],
+                animation.start_value[1] + animation.distance[1],
+            ]
         except Exception:
             animation.start_value += animation.distance
         animation.frame_counter = 0
         animation.last_ease = 0
 
     animation.loop_counter += 1
-    animations_updated.append(animation)
+    return animation
 
 
-def add_delta_positions(animation: Animation, ease):
+def add_delta_positions(animation: Animation, ease: float):
     """
     collects delta movements of all position animations for a certain item
     """
@@ -455,7 +465,10 @@ def add_delta_positions(animation: Animation, ease):
             if animation.frame_counter < animation.duration or animation.loop:
                 item[3] = True
 
-            if animation.loop == AnimationLoopType.CYCLE and animation.frame_counter == animation.duration:
+            if (
+                animation.loop == AnimationLoopType.CYCLE
+                and animation.frame_counter == animation.duration
+            ):
                 item[3] = False
 
             if animation.frame_counter == animation.duration and not item[3]:
@@ -463,10 +476,17 @@ def add_delta_positions(animation: Animation, ease):
 
             break
     else:
-        delta_positions.append([animation.object_name, animation.start_value[0], animation.start_value[1], True])
+        delta_positions.append(
+            [
+                animation.object_name,
+                animation.start_value[0],
+                animation.start_value[1],
+                True,
+            ]
+        )
 
 
-def add_delta_sizes(animation: Animation, ease):
+def add_delta_sizes(animation: Animation, ease: float):
     """
     collects delta movements of all size animations for a certain item
     """
@@ -484,7 +504,10 @@ def add_delta_sizes(animation: Animation, ease):
             if animation.frame_counter < animation.duration or animation.loop:
                 item[3] = True
 
-            if animation.loop == AnimationLoopType.CYCLE and animation.frame_counter == animation.duration:
+            if (
+                animation.loop == AnimationLoopType.CYCLE
+                and animation.frame_counter == animation.duration
+            ):
                 item[3] = False
 
             if animation.frame_counter == animation.duration and not item[3]:
@@ -492,10 +515,17 @@ def add_delta_sizes(animation: Animation, ease):
 
             break
     else:
-        delta_sizes.append([animation.object_name, animation.start_value[0], animation.start_value[1], True])
+        delta_sizes.append(
+            [
+                animation.object_name,
+                animation.start_value[0],
+                animation.start_value[1],
+                True,
+            ]
+        )
 
 
-def add_delta_opacities(animation: Animation, ease):
+def add_delta_opacities(animation: Animation, ease: float):
     """
     collects delta movements of all opacity animations for a certain item
     """
@@ -511,7 +541,10 @@ def add_delta_opacities(animation: Animation, ease):
             if animation.frame_counter < animation.duration or animation.loop:
                 item[2] = True
 
-            if animation.loop == AnimationLoopType.CYCLE and animation.frame_counter == animation.duration:
+            if (
+                animation.loop == AnimationLoopType.CYCLE
+                and animation.frame_counter == animation.duration
+            ):
                 item[2] = False
 
             if animation.frame_counter == animation.duration and not item[2]:
@@ -551,6 +584,7 @@ def set_pos():
         dpg.set_item_pos(item[0], [x_int, y_int])
 
     delta_positions = items_updated
+    print
 
 
 def set_size():
@@ -590,14 +624,19 @@ def dpg_get_alpha_style(item):
     if theme is None:
         theme = dpg.add_theme()
         theme_component = dpg.add_theme_component(dpg.mvAll, parent=theme)
-        alpha_style = dpg.add_theme_style(dpg.mvStyleVar_Alpha, 1, category=dpg.mvThemeCat_Core, parent=theme_component)
+        alpha_style = dpg.add_theme_style(
+            dpg.mvStyleVar_Alpha,
+            1,
+            category=dpg.mvThemeCat_Core,
+            parent=theme_component,
+        )
         dpg.bind_item_theme(item, theme)
         return alpha_style
 
     all_components = dpg.get_item_children(theme, 1)
     theme_component = None
     for component in all_components:
-        if dpg.get_item_configuration(component)['item_type'] == dpg.mvAll:
+        if dpg.get_item_configuration(component)["item_type"] == dpg.mvAll:
             theme_component = component
             break
     if theme_component is None:
@@ -606,11 +645,16 @@ def dpg_get_alpha_style(item):
     all_styles = dpg.get_item_children(theme_component, 1)
     alpha_style = None
     for style in all_styles:
-        if dpg.get_item_configuration(style)['target'] == dpg.mvStyleVar_Alpha:
+        if dpg.get_item_configuration(style)["target"] == dpg.mvStyleVar_Alpha:
             alpha_style = style
             break
     if alpha_style is None:
-        alpha_style = dpg.add_theme_style(dpg.mvStyleVar_Alpha, 1, category=dpg.mvThemeCat_Core, parent=theme_component)
+        alpha_style = dpg.add_theme_style(
+            dpg.mvStyleVar_Alpha,
+            1,
+            category=dpg.mvThemeCat_Core,
+            parent=theme_component,
+        )
     return alpha_style
 
 
