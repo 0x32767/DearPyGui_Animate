@@ -12,16 +12,46 @@ v0.12
 # 				Imports
 # -----------------------------------------------------------------------------
 
+from __future__ import annotations
+
+from dataclasses import dataclass
+
 import dearpygui.dearpygui as dpg
 
 # -----------------------------------------------------------------------------
 # 				Global Registers
 # -----------------------------------------------------------------------------
 
-animations = []
+animations: list[Animation] = []
 delta_positions = []
 delta_sizes = []
 delta_opacities = []
+
+# -----------------------------------------------------------------------------
+# 				Animation dataclasses
+# -----------------------------------------------------------------------------
+
+@dataclass()
+class Animation:
+    animation_name: any
+    animation_type: str # either: position size opacity
+    object_name: any
+    start_value: any
+    distance: any
+    ease: any
+    duration: int
+    starttime: any
+    frame_counter: int
+    last_ease: int
+    loop: str # either: ping-pong cycle continue
+    loop_counter: int
+    callback_function: any
+    function_data: any
+    early_callback: any
+    early_callback_data: any
+    isplaying: bool
+    ispaused: bool
+    isreversed: bool
 
 # -----------------------------------------------------------------------------
 # 				Main Functions
@@ -74,7 +104,7 @@ def add(type, object, startval, endval, ease, duration, **kwargs):
     ispaused = False
     isreversed = False
 
-    new_animation = [
+    new_animation = Animation(
         options["name"],
         type,
         object,
@@ -94,7 +124,7 @@ def add(type, object, startval, endval, ease, duration, **kwargs):
         isplaying,
         ispaused,
         isreversed
-    ]
+    )
 
     global animations
     animations.append(new_animation)
@@ -125,49 +155,49 @@ def run():
     animation[18] = isreversed
     """
 
-    animations_updated = []
+    animations_updated: list[Animation] = []
     callbacks = {}
     global animations
 
     for animation in animations:
 
-        if dpg.get_total_time() >= animation[7] and not animation[17]:
+        if dpg.get_total_time() >= animation.starttime and not animation.ispaused:
 
-            if animation[14] and animation[8] == 0:
-                callbacks[animation[14]] = (animation[2], animation[15])
+            if animation.early_callback and animation.frame_counter == 0:
+                callbacks[animation.early_callback] = (animation.object_name, animation.early_callback_data)
 
-            animation[16] = True
-            frame = animation[8] / animation[6]
-            ease = BezierTransistion(frame, animation[5])
+            animation.isplaying = True
+            frame = animation.frame_counter / animation.duration
+            ease = BezierTransistion(frame, animation.ease)
 
-            if animation[1] == "position":
+            if animation.animation_type == "position":
                 add_delta_positions(animation, ease)
 
-            elif animation[1] == "size":
+            elif animation.animation_type == "size":
                 add_delta_sizes(animation, ease)
 
-            elif animation[1] == "opacity":
+            elif animation.animation_type == "opacity":
                 add_delta_opacities(animation, ease)
 
-            animation[9] = ease
+            animation.last_ease = ease
 
-            if animation[8] < animation[6]:
-                if not animation[18]:
-                    animation[8] += 1
+            if animation.frame_counter < animation.duration:
+                if not animation.isreversed:
+                    animation.frame_counter += 1
                 else:
-                    if animation[8] == 0:
-                        animation[18] = False
-                        animation[8] = 1
+                    if animation.frame_counter == 0:
+                        animation.isreversed = False
+                        animation.frame_counter = 1
                     else:
-                        animation[8] -= 1
+                        animation.frame_counter -= 1
                 animations_updated.append(animation)
 
-            elif animation[8] == animation[6]:
-                if animation[10]:
+            elif animation.frame_counter == animation.duration:
+                if animation.loop:
                     set_loop(animation, animations_updated)
 
-                if animation[12]:
-                    callbacks[animation[12]] = (animation[2], animation[13])
+                if animation.callback_function:
+                    callbacks[animation.callback_function] = (animation.object_name, animation.function_data)
 
         else:
             animations_updated.append(animation)
@@ -178,7 +208,7 @@ def run():
 
     animations = animations_updated
 
-    for func, dat in callbacks.items():
+    for func, dat in callbacks.items(): # TODO tuple unpack `dat`
         func(dat[0], dat[1])
 
 
@@ -190,8 +220,8 @@ def play(animation_name):
     global animations
 
     for animation in animations:
-        if animation[0] == animation_name:
-            animation[17] = False
+        if animation.animation_name == animation_name:
+            animation.ispaused = False
 
 
 def pause(animation_name):
@@ -202,8 +232,8 @@ def pause(animation_name):
     global animations
 
     for animation in animations:
-        if animation[0] == animation_name:
-            animation[17] = True
+        if animation.animation_name == animation_name:
+            animation.ispaused = True
 
 
 def remove(animation_name):
@@ -222,15 +252,15 @@ def remove(animation_name):
     global delta_opacities
 
     for animation in animations:
-        if not animation[0] == animation_name:
+        if not animation.animation_name == animation_name:
             animations_updated.append(animation)
         else:
-            object_anitype = [animation[2], animation[1]]
+            object_anitype = [animation.object_name, animation.animation_type]
 
     if object_anitype:
         found = False
         for ani in animations_updated:
-            if ani[2] == object_anitype[0] and ani[1] == object_anitype[1]:
+            if ani.object_name == object_anitype[0] and ani.animation_type == object_anitype[1]:
                 found = True
                 break
 
@@ -267,59 +297,59 @@ def get(*args):
     for animation in animations:
         for entry in args:
             if entry == "name":
-                return_data.append(animation[0])
+                return_data.append(animation.animation_name)
 
             if entry == "type":
-                return_data.append(animation[1])
+                return_data.append(animation.animation_type)
 
             if entry == "object":
-                return_data.append(animation[2])
+                return_data.append(animation.object_name)
 
             if entry == "startval":
-                return_data.append(animation[3])
+                return_data.append(animation.start_value)
 
             if entry == "endval":
                 try:
-                    endval = [animation[3][0] + animation[4][0], animation[3][1] + animation[4][1]]
+                    endval = [animation.start_value[0] + animation.distance[0], animation.start_value[1] + animation.distance[1]]
                 except Exception:
-                    endval = animation[3] + animation[4]
+                    endval = animation.start_value + animation.distance
                 return_data.append(endval)
 
             if entry == "ease":
-                return_data.append(animation[5])
+                return_data.append(animation.ease)
 
             if entry == "duration":
-                return_data.append(animation[6])
+                return_data.append(animation.duration)
 
             if entry == "starttime":
-                return_data.append(animation[7])
+                return_data.append(animation.starttime)
 
             if entry == "framecounter":
-                return_data.append(animation[8])
+                return_data.append(animation.frame_counter)
 
             if entry == "loop":
-                return_data.append(animation[10])
+                return_data.append(animation.loop)
 
             if entry == "loopcounter":
-                return_data.append(animation[11])
+                return_data.append(animation.loop_counter)
 
             if entry == "callback":
-                return_data.append(animation[12])
+                return_data.append(animation.callback_function)
 
             if entry == "callback_data":
-                return_data.append(animation[13])
+                return_data.append(animation.function_data)
 
             if entry == "early_callback":
-                return_data.append(animation[14])
+                return_data.append(animation.early_callback)
 
             if entry == "early_callback_data":
-                return_data.append(animation[15])
+                return_data.append(animation.early_callback_data)
 
             if entry == "isplaying":
-                return_data.append(animation[16])
+                return_data.append(animation.ispaused)
 
             if entry == "ispaused":
-                return_data.append(animation[17])
+                return_data.append(animation.ispaused)
 
     if not return_data:
         return False
@@ -359,33 +389,33 @@ def BezierTransistion(search, handles):
     return 3 * t * (1 - t) ** 2 * h1y + 3 * t ** 2 * (1 - t) * h2y + t ** 3
 
 
-def set_loop(animation, animations_updated):
+def set_loop(animation: Animation, animations_updated):
     """
     prepare animation for next loop iteration
     """
 
-    if animation[10] == "ping-pong":
-        animation[18] = True
-        animation[8] -= 1
-        animation[9] = 1
+    if animation.loop == "ping-pong":
+        animation.isreversed = True
+        animation.frame_counter -= 1
+        animation.last_ease = 1
 
-    elif animation[10] == "cycle":
-        animation[8] = 0
-        animation[9] = 0
+    elif animation.loop == "cycle":
+        animation.frame_counter = 0
+        animation.last_ease = 0
 
-    elif animation[10] == "continue":
+    elif animation.loop == "continue":
         try:
-            animation[3] = [animation[3][0] + animation[4][0], animation[3][1] + animation[4][1]]
+            animation.start_value = [animation.start_value[0] + animation.distance[0], animation.start_value[1] + animation.distance[1]]
         except Exception:
-            animation[3] += animation[4]
-        animation[8] = 0
-        animation[9] = 0
+            animation.start_value += animation.distance
+        animation.frame_counter = 0
+        animation.last_ease = 0
 
-    animation[11] += 1
+    animation.loop_counter += 1
     animations_updated.append(animation)
 
 
-def add_delta_positions(animation, ease):
+def add_delta_positions(animation: Animation, ease):
     """
     collects delta movements of all position animations for a certain item
     """
@@ -393,29 +423,29 @@ def add_delta_positions(animation, ease):
     global delta_positions
 
     for item in delta_positions:
-        if animation[2] == item[0]:
+        if animation.object_name == item[0]:
 
-            x_step = animation[4][0] * (ease - animation[9])
-            y_step = animation[4][1] * (ease - animation[9])
+            x_step = animation.distance[0] * (ease - animation.last_ease)
+            y_step = animation.distance[1] * (ease - animation.last_ease)
 
             item[1] += x_step
             item[2] += y_step
 
-            if animation[8] < animation[6] or animation[10]:
+            if animation.frame_counter < animation.duration or animation.loop:
                 item[3] = True
 
-            if animation[10] == "cycle" and animation[8] == animation[6]:
+            if animation.loop == "cycle" and animation.frame_counter == animation.duration:
                 item[3] = False
 
-            if animation[8] == animation[6] and not item[3]:
+            if animation.frame_counter == animation.duration and not item[3]:
                 item[3] = False
 
             break
     else:
-        delta_positions.append([animation[2], animation[3][0], animation[3][1], True])
+        delta_positions.append([animation.object_name, animation.start_value[0], animation.start_value[1], True])
 
 
-def add_delta_sizes(animation, ease):
+def add_delta_sizes(animation: Animation, ease):
     """
     collects delta movements of all size animations for a certain item
     """
@@ -423,28 +453,28 @@ def add_delta_sizes(animation, ease):
     global delta_sizes
 
     for item in delta_sizes:
-        if animation[2] == item[0]:
-            w_step = animation[4][0] * (ease - animation[9])
-            h_step = animation[4][1] * (ease - animation[9])
+        if animation.object_name == item[0]:
+            w_step = animation.distance[0] * (ease - animation.last_ease)
+            h_step = animation.distance[1] * (ease - animation.last_ease)
 
             item[1] += w_step
             item[2] += h_step
 
-            if animation[8] < animation[6] or animation[10]:
+            if animation.frame_counter < animation.duration or animation.loop:
                 item[3] = True
 
-            if animation[10] == "cycle" and animation[8] == animation[6]:
+            if animation.loop == "cycle" and animation.frame_counter == animation.duration:
                 item[3] = False
 
-            if animation[8] == animation[6] and not item[3]:
+            if animation.frame_counter == animation.duration and not item[3]:
                 item[3] = False
 
             break
     else:
-        delta_sizes.append([animation[2], animation[3][0], animation[3][1], True])
+        delta_sizes.append([animation.object_name, animation.start_value[0], animation.start_value[1], True])
 
 
-def add_delta_opacities(animation, ease):
+def add_delta_opacities(animation: Animation, ease):
     """
     collects delta movements of all opacity animations for a certain item
     """
@@ -452,23 +482,23 @@ def add_delta_opacities(animation, ease):
     global delta_opacities
 
     for item in delta_opacities:
-        if animation[2] == item[0]:
-            o_step = animation[4] * (ease - animation[9])
+        if animation.object_name == item[0]:
+            o_step = animation.distance * (ease - animation.last_ease)
 
             item[1] += o_step
 
-            if animation[8] < animation[6] or animation[10]:
+            if animation.frame_counter < animation.duration or animation.loop:
                 item[2] = True
 
-            if animation[10] == "cycle" and animation[8] == animation[6]:
+            if animation.loop == "cycle" and animation.frame_counter == animation.duration:
                 item[2] = False
 
-            if animation[8] == animation[6] and not item[2]:
+            if animation.frame_counter == animation.duration and not item[2]:
                 item[2] = False
 
             break
     else:
-        delta_opacities.append([animation[2], animation[3], True])
+        delta_opacities.append([animation.object_name, animation.start_value, True])
 
 
 def set_pos():
