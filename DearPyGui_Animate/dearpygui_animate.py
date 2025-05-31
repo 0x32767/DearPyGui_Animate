@@ -32,6 +32,7 @@ delta_opacities = []
 # 				Enum for Animation options
 # -----------------------------------------------------------------------------
 
+# Strings are set manually for backwards compatibility purposes
 class AnimationType(StrEnum):
     POSITION = "position"
     SIZE = "size"
@@ -64,15 +65,15 @@ class Animation:
     function_data: any
     early_callback: any
     early_callback_data: any
-    isplaying: bool
-    ispaused: bool
-    isreversed: bool
+    is_playing: bool
+    is_paused: bool
+    is_reversed: bool
 
 # -----------------------------------------------------------------------------
 # 				Main Functions
 # -----------------------------------------------------------------------------
 
-def add(animation_type: AnimationType, object, startval, endval, ease, duration, **kwargs):
+def add(animation_type: AnimationType, object, start_val, end_val, ease, duration, **kwargs):
     """
     adds a new animation to animations register
     """
@@ -82,28 +83,29 @@ def add(animation_type: AnimationType, object, startval, endval, ease, duration,
     if animation_type == AnimationType.SIZE:
         if dpg.get_item_type(object) == "mvAppItemType::Window":
             for i in range(2):
-                if startval[i] < 32:
-                    startval[i] = 32
+                if start_val[i] < 32:
+                    start_val[i] = 32
 
-                elif endval[i] < 32:
-                    endval[i] = 32
+                elif end_val[i] < 32:
+                    end_val[i] = 32
         else:
             for i in range(2):
-                if startval[i] < 1:
-                    startval[i] = 1
+                if start_val[i] < 1:
+                    start_val[i] = 1
 
-                elif endval[i] < 1:
-                    endval[i] = 1
+                elif end_val[i] < 1:
+                    end_val[i] = 1
 
-    # rewrite endval to distance, all calculations are based on distance
+    # rewrite end_val to distance, all calculations are based on distance
     try:
-        distance = [endval[0] - startval[0], endval[1] - startval[1]]
+        distance = [end_val[0] - start_val[0], end_val[1] - start_val[1]]
     except Exception:
-        distance = endval - startval
+        distance = end_val - start_val
 
+    # TODO make the dict redundant using kwargs.get("key", "default")
     options = {
         "name": "",
-        "timeoffset": 0,
+        "time_offset": 0,
         "loop": "",
         "callback": "",
         "callback_data": "",
@@ -112,34 +114,34 @@ def add(animation_type: AnimationType, object, startval, endval, ease, duration,
     }
     options.update(kwargs)
 
-    starttime = dpg.get_total_time() + options["timeoffset"]
-    framecounter = 0
+    starttime = dpg.get_total_time() + options["time_offset"]
+    frame_counter = 0
     last_ease = 0
-    loopcounter = 0
-    isplaying = False
-    ispaused = False
-    isreversed = False
+    loop_counter = 0
+    is_playing = False
+    is_paused = False
+    is_reversed = False
 
     new_animation = Animation(
         options["name"],
         animation_type,
         object,
-        startval,
+        start_val,
         distance,
         ease,
         duration,
         starttime,
-        framecounter,
+        frame_counter,
         last_ease,
         options["loop"],
-        loopcounter,
+        loop_counter,
         options["callback"],
         options["callback_data"],
         options["early_callback"],
         options["early_callback_data"],
-        isplaying,
-        ispaused,
-        isreversed
+        is_playing,
+        is_paused,
+        is_reversed
     )
 
     global animations
@@ -166,9 +168,9 @@ def run():
     animation[13] = function data
     animation[14] = early callback
     animation[15] = early callback data
-    animation[16] = isplaying
-    animation[17] = ispaused
-    animation[18] = isreversed
+    animation[16] = is_playing
+    animation[17] = is_paused
+    animation[18] = is_reversed
     """
 
     animations_updated: list[Animation] = []
@@ -177,14 +179,14 @@ def run():
 
     for animation in animations:
 
-        if dpg.get_total_time() >= animation.starttime and not animation.ispaused:
+        if dpg.get_total_time() >= animation.starttime and not animation.is_paused:
 
             if animation.early_callback and animation.frame_counter == 0:
                 callbacks[animation.early_callback] = (animation.object_name, animation.early_callback_data)
 
-            animation.isplaying = True
+            animation.is_playing = True
             frame = animation.frame_counter / animation.duration
-            ease = BezierTransistion(frame, animation.ease)
+            ease = bezier_transition(frame, animation.ease)
 
             # TODO raise error/warning here
             if animation.animation_type == AnimationType.POSITION:
@@ -199,11 +201,11 @@ def run():
             animation.last_ease = ease
 
             if animation.frame_counter < animation.duration:
-                if not animation.isreversed:
+                if not animation.is_reversed:
                     animation.frame_counter += 1
                 else:
                     if animation.frame_counter == 0:
-                        animation.isreversed = False
+                        animation.is_reversed = False
                         animation.frame_counter = 1
                     else:
                         animation.frame_counter -= 1
@@ -238,7 +240,7 @@ def play(animation_name):
 
     for animation in animations:
         if animation.animation_name == animation_name:
-            animation.ispaused = False
+            animation.is_paused = False
 
 
 def pause(animation_name):
@@ -250,7 +252,7 @@ def pause(animation_name):
 
     for animation in animations:
         if animation.animation_name == animation_name:
-            animation.ispaused = True
+            animation.is_paused = True
 
 
 def remove(animation_name):
@@ -323,15 +325,15 @@ def get(*args):
             if entry == "object":
                 return_data.append(animation.object_name)
 
-            if entry == "startval":
+            if entry == "startval": # Don't touch str, backwards compatibility
                 return_data.append(animation.start_value)
 
-            if entry == "endval":
+            if entry == "endval": # Don't touch str, backwards compatibility
                 try:
-                    endval = [animation.start_value[0] + animation.distance[0], animation.start_value[1] + animation.distance[1]]
+                    end_val = [animation.start_value[0] + animation.distance[0], animation.start_value[1] + animation.distance[1]]
                 except Exception:
-                    endval = animation.start_value + animation.distance
-                return_data.append(endval)
+                    end_val = animation.start_value + animation.distance
+                return_data.append(end_val)
 
             if entry == "ease":
                 return_data.append(animation.ease)
@@ -342,13 +344,13 @@ def get(*args):
             if entry == "starttime":
                 return_data.append(animation.starttime)
 
-            if entry == "framecounter":
+            if entry == "framecounter": # Don't touch str, backwards compatibility
                 return_data.append(animation.frame_counter)
 
             if entry == "loop":
                 return_data.append(animation.loop)
 
-            if entry == "loopcounter":
+            if entry == "loopcounter": # Don't touch str, backwards compatibility
                 return_data.append(animation.loop_counter)
 
             if entry == "callback":
@@ -363,11 +365,11 @@ def get(*args):
             if entry == "early_callback_data":
                 return_data.append(animation.early_callback_data)
 
-            if entry == "isplaying":
-                return_data.append(animation.ispaused)
+            if entry == "isplaying": # Don't touch str, backwards compatibility
+                return_data.append(animation.is_paused)
 
-            if entry == "ispaused":
-                return_data.append(animation.ispaused)
+            if entry == "ispaused": # Don't touch str, backwards compatibility
+                return_data.append(animation.is_paused)
 
     if not return_data:
         return False
@@ -380,7 +382,7 @@ def get(*args):
 # 				Helper Functions
 # -----------------------------------------------------------------------------
 
-def BezierTransistion(search, handles):
+def bezier_transition(search, handles):
     """
     solving y (progress) of bezier curve for given x (time)
     using the newton-raphson method
@@ -414,7 +416,7 @@ def set_loop(animation: Animation, animations_updated):
 
     # TODO raise error if invalid
     if animation.loop == AnimationLoopType.PING_PONG:
-        animation.isreversed = True
+        animation.is_reversed = True
         animation.frame_counter -= 1
         animation.last_ease = 1
 
