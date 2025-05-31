@@ -44,6 +44,7 @@ class AnimationLoopType(StrEnum):
     CYCLE = "cycle"
     PING_PONG = "ping-pong"
     CONTINUE = "continue"
+    NO_LOOP = "no-loop"
 
 
 # -----------------------------------------------------------------------------
@@ -92,7 +93,7 @@ def add(
     callback_data="",
     early_callback="",
     early_callback_data="",
-    loop="",
+    loop=AnimationLoopType.NO_LOOP,
     timeoffset=0,
 ):
     """
@@ -448,6 +449,9 @@ def set_loop(animation: Animation):
             animation.start_value += animation.distance
         animation.frame_counter = 0
         animation.last_ease = 0
+    
+    elif animation.loop == AnimationLoopType.NO_LOOP:
+        pass
 
     animation.loop_counter += 1
     return animation
