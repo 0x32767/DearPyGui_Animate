@@ -15,6 +15,7 @@ v0.12
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 
 import dearpygui.dearpygui as dpg
 
@@ -28,13 +29,27 @@ delta_sizes = []
 delta_opacities = []
 
 # -----------------------------------------------------------------------------
+# 				Enum for Animation options
+# -----------------------------------------------------------------------------
+
+class AnimationType(StrEnum):
+    POSITION = "position"
+    SIZE = "size"
+    OPACITY = "opacity"
+
+class AnimationLoopType(StrEnum):
+    CYCLE = "cycle"
+    PING_PONG = "ping-pong"
+    CONTINUE = "continue"
+
+# -----------------------------------------------------------------------------
 # 				Animation dataclasses
 # -----------------------------------------------------------------------------
 
-@dataclass()
+@dataclass(slots=True)
 class Animation:
     animation_name: any
-    animation_type: str # either: position size opacity
+    animation_type: AnimationType # either: position size opacity
     object_name: any
     start_value: any
     distance: any
@@ -43,7 +58,7 @@ class Animation:
     starttime: any
     frame_counter: int
     last_ease: int
-    loop: str # either: ping-pong cycle continue
+    loop: AnimationLoopType # either: ping-pong cycle continue
     loop_counter: int
     callback_function: any
     function_data: any
@@ -57,13 +72,14 @@ class Animation:
 # 				Main Functions
 # -----------------------------------------------------------------------------
 
-def add(type, object, startval, endval, ease, duration, **kwargs):
+def add(animation_type: AnimationType, object, startval, endval, ease, duration, **kwargs):
     """
     adds a new animation to animations register
     """
 
+    # TODO raise a warning to the user in the following cases
     # fix min-values: smallest size window = 32x32, smallest size item = 1x1
-    if type == "size":
+    if animation_type == AnimationType.SIZE:
         if dpg.get_item_type(object) == "mvAppItemType::Window":
             for i in range(2):
                 if startval[i] < 32:
@@ -106,7 +122,7 @@ def add(type, object, startval, endval, ease, duration, **kwargs):
 
     new_animation = Animation(
         options["name"],
-        type,
+        animation_type,
         object,
         startval,
         distance,
@@ -170,13 +186,14 @@ def run():
             frame = animation.frame_counter / animation.duration
             ease = BezierTransistion(frame, animation.ease)
 
-            if animation.animation_type == "position":
+            # TODO raise error/warning here
+            if animation.animation_type == AnimationType.POSITION:
                 add_delta_positions(animation, ease)
 
-            elif animation.animation_type == "size":
+            elif animation.animation_type == AnimationType.SIZE:
                 add_delta_sizes(animation, ease)
 
-            elif animation.animation_type == "opacity":
+            elif animation.animation_type == AnimationType.OPACITY:
                 add_delta_opacities(animation, ease)
 
             animation.last_ease = ease
@@ -265,19 +282,20 @@ def remove(animation_name):
                 break
 
         if not found:
-            if object_anitype[1] == "position":
+            # TODO raise error if animation type doesn't exist
+            if object_anitype[1] == AnimationType.POSITION:
                 for entry in delta_positions:
                     if not entry[0] == object_anitype[0]:
                         delta_positions_updated.append(entry)
                 delta_positions = delta_positions_updated
 
-            elif object_anitype[1] == "size":
+            elif object_anitype[1] == AnimationType.SIZE:
                 for entry in delta_sizes:
                     if not entry[0] == object_anitype[0]:
                         delta_sizes_updated.append(entry)
                 delta_sizes = delta_sizes_updated
 
-            elif object_anitype[1] == "opacity":
+            elif object_anitype[1] == AnimationType.OPACITY:
                 for entry in delta_opacities:
                     if not entry[0] == object_anitype[0]:
                         delta_opacities_updated.append(entry)
@@ -394,16 +412,17 @@ def set_loop(animation: Animation, animations_updated):
     prepare animation for next loop iteration
     """
 
-    if animation.loop == "ping-pong":
+    # TODO raise error if invalid
+    if animation.loop == AnimationLoopType.PING_PONG:
         animation.isreversed = True
         animation.frame_counter -= 1
         animation.last_ease = 1
 
-    elif animation.loop == "cycle":
+    elif animation.loop == AnimationLoopType.CYCLE:
         animation.frame_counter = 0
         animation.last_ease = 0
 
-    elif animation.loop == "continue":
+    elif animation.loop == AnimationLoopType.CONTINUE:
         try:
             animation.start_value = [animation.start_value[0] + animation.distance[0], animation.start_value[1] + animation.distance[1]]
         except Exception:
@@ -434,7 +453,7 @@ def add_delta_positions(animation: Animation, ease):
             if animation.frame_counter < animation.duration or animation.loop:
                 item[3] = True
 
-            if animation.loop == "cycle" and animation.frame_counter == animation.duration:
+            if animation.loop == AnimationLoopType.CYCLE and animation.frame_counter == animation.duration:
                 item[3] = False
 
             if animation.frame_counter == animation.duration and not item[3]:
@@ -463,7 +482,7 @@ def add_delta_sizes(animation: Animation, ease):
             if animation.frame_counter < animation.duration or animation.loop:
                 item[3] = True
 
-            if animation.loop == "cycle" and animation.frame_counter == animation.duration:
+            if animation.loop == AnimationLoopType.CYCLE and animation.frame_counter == animation.duration:
                 item[3] = False
 
             if animation.frame_counter == animation.duration and not item[3]:
@@ -490,7 +509,7 @@ def add_delta_opacities(animation: Animation, ease):
             if animation.frame_counter < animation.duration or animation.loop:
                 item[2] = True
 
-            if animation.loop == "cycle" and animation.frame_counter == animation.duration:
+            if animation.loop == AnimationLoopType.CYCLE and animation.frame_counter == animation.duration:
                 item[2] = False
 
             if animation.frame_counter == animation.duration and not item[2]:
