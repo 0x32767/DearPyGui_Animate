@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+import warnings
 
 import dearpygui.dearpygui as dpg
 
@@ -44,7 +45,7 @@ class AnimationLoopType(StrEnum):
     CYCLE = "cycle"
     PING_PONG = "ping-pong"
     CONTINUE = "continue"
-    NO_LOOP = "no-loop"
+    NO_LOOP = ""
 
 
 # -----------------------------------------------------------------------------
@@ -100,10 +101,15 @@ def add(
     adds a new animation to animations register
     """
 
-    # TODO raise a warning to the user in the following cases
     # fix min-values: smallest size window = 32x32, smallest size item = 1x1
     if animation_type == AnimationType.SIZE:
         if dpg.get_item_type(tag) == "mvAppItemType::Window":
+            if min(start_val) < 32:
+                warnings.warn(f"Minimum size for a window is 32 pixels, got {start_val=}")
+
+            if min(end_val) < 32:
+                warnings.warn(f"Minimum size for a window is 32 pixels, got {start_val=}")
+
             for i in range(2):
                 if start_val[i] < 32:
                     start_val[i] = 32
@@ -111,6 +117,12 @@ def add(
                 elif end_val[i] < 32:
                     end_val[i] = 32
         else:
+            if min(start_val) < 32:
+                warnings.warn(f"Minimum size for a widget is 1 pixel, got {start_val=}")
+
+            if min(end_val) < 32:
+                warnings.warn(f"Minimum size for a widget is 1 pixel, got {start_val=}")
+
             for i in range(2):
                 if start_val[i] < 1:
                     start_val[i] = 1
@@ -136,7 +148,7 @@ def add(
         callback_data=callback_data,
         early_callback=early_callback,
         early_callback_data=early_callback_data,
-        loop=loop, # TODO add support for a NO_LOOP as a loop type
+        loop=loop,
         starttime=(dpg.get_total_time() + timeoffset),
         is_playing=False,
         is_paused=False,
@@ -193,7 +205,6 @@ def run():
 
             ease = bezier_transition(frame, animation.ease)
 
-            # TODO raise error/warning here
             if animation.animation_type == AnimationType.POSITION:
                 add_delta_positions(animation, ease)
 
@@ -202,6 +213,9 @@ def run():
 
             elif animation.animation_type == AnimationType.OPACITY:
                 add_delta_opacities(animation, ease)
+            
+            else:
+                raise ValueError(f"Invalid animation type, got {animation.animation_type}")
 
             animation.last_ease = ease
 
@@ -235,8 +249,8 @@ def run():
 
     animations = animations_updated
 
-    for func, dat in callbacks.items():  # TODO tuple unpack `dat`
-        func(dat[0], dat[1])
+    for func, (obj_name, callback_data) in callbacks.items():
+        func(obj_name, callback_data)
 
 
 def play(animation_name: str):
@@ -295,7 +309,6 @@ def remove(animation_name: str):
                 break
 
         if not found:
-            # TODO raise error if animation type doesn't exist
             if object_anitype[1] == AnimationType.POSITION:
                 for entry in delta_positions:
                     if not entry[0] == object_anitype[0]:
@@ -313,6 +326,10 @@ def remove(animation_name: str):
                     if not entry[0] == object_anitype[0]:
                         delta_opacities_updated.append(entry)
                 delta_opacities = delta_opacities_updated
+            
+            else:
+                raise ValueError(f"Invalid animation type, got {animation.animation_type}")
+
 
     animations = animations_updated
 
@@ -388,8 +405,7 @@ def get(*args):
     if not return_data:
         return False
 
-    else:
-        return return_data
+    return return_data
 
 
 # -----------------------------------------------------------------------------
@@ -429,7 +445,6 @@ def set_loop(animation: Animation):
     prepare animation for next loop iteration
     """
 
-    # TODO raise error if invalid
     if animation.loop == AnimationLoopType.PING_PONG:
         animation.is_reversed = True
         animation.frame_counter -= 1
@@ -452,6 +467,9 @@ def set_loop(animation: Animation):
     
     elif animation.loop == AnimationLoopType.NO_LOOP:
         pass
+    
+    else:
+        raise ValueError(f"Invalid animation loop type, got {animation.loop}")
 
     animation.loop_counter += 1
     return animation
@@ -595,7 +613,6 @@ def set_pos():
         dpg.set_item_pos(item[0], [x_int, y_int])
 
     delta_positions = items_updated
-    print
 
 
 def set_size():
